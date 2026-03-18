@@ -14,6 +14,11 @@ MQTT_COMPONENT_TYPE(MQTTBinarySensorComponent, "binary_sensor")
 const EntityBase *MQTTBinarySensorComponent::get_entity() const { return this->binary_sensor_; }
 
 void MQTTBinarySensorComponent::setup() {
+  if (mqtt::global_mqtt_client->get_homed_custom() && !this->binary_sensor_->is_status_binary_sensor()) {
+    auto expose = this->get_homed_name();
+    auto option = str_sprintf("\"%s\":{\"type\":\"binary\"}", expose.c_str());
+    mqtt::global_mqtt_client->get_homed_custom()->add_expose_with_option(expose, option);
+  }
   this->binary_sensor_->add_on_state_callback([this](bool state) { this->publish_state(state); });
 }
 
@@ -39,6 +44,10 @@ void MQTTBinarySensorComponent::send_discovery(JsonObject root, mqtt::SendDiscov
     root[MQTT_PAYLOAD_ON] = mqtt::global_mqtt_client->get_availability().payload_available;
   if (this->binary_sensor_->is_status_binary_sensor())
     root[MQTT_PAYLOAD_OFF] = mqtt::global_mqtt_client->get_availability().payload_not_available;
+  if (mqtt::global_mqtt_client->get_homed_custom() && !this->binary_sensor_->is_status_binary_sensor()) {
+    auto name = this->get_homed_name();
+    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " }}";
+  }
   config.command_topic = false;
 }
 bool MQTTBinarySensorComponent::send_initial_state() {
@@ -54,6 +63,11 @@ bool MQTTBinarySensorComponent::publish_state(bool state) {
 
   char topic_buf[MQTT_DEFAULT_TOPIC_MAX_LEN];
   const char *state_s = state ? "ON" : "OFF";
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto name = this->get_homed_name();
+    return this->publish(this->get_state_topic_(), "{\"" + name + "\": \"" +
+      std::string(state_s) + "\"}");
+  }
   return this->publish(this->get_state_topic_to_(topic_buf), state_s);
 }
 

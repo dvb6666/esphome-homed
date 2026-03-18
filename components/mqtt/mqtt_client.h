@@ -22,6 +22,7 @@
 #endif
 #include "lwip/ip_addr.h"
 
+#include <set>
 #include <vector>
 
 namespace esphome::mqtt {
@@ -87,6 +88,30 @@ struct MQTTDiscoveryInfo {
   bool clean;
   MQTTDiscoveryUniqueIdGenerator unique_id_generator;
   MQTTDiscoveryObjectIdGenerator object_id_generator;
+};
+
+class HOMEdCustomConfig {
+ public:
+  HOMEdCustomConfig(const std::string &prefix, const std::string &device_id, bool discovery, bool cloud);
+  const std::string &get_device_id() { return this->device_id_; }
+  const std::string &get_avail_topic() { return this->avail_topic_; }
+  const std::string &get_command_topic() { return this->command_topic_; }
+  const std::string &get_fd_topic() { return this->fd_topic_; }
+  const std::string &get_td_topic() { return this->td_topic_; }
+  const std::string &get_via_device() { return this->via_device_; }
+  bool is_discovery() { return this->discovery_; }
+  bool is_cloud() { return this->cloud_; }
+  void dump_config();
+  void add_expose_with_option(std::string &expose, std::string &option);
+  bool can_publish(uint32_t now);
+  const std::set<std::string> &get_exposes() { return this->exposes_; }
+  const std::set<std::string> &get_options() { return this->options_; }
+ private:
+  std::string prefix_, device_id_, avail_topic_, command_topic_, fd_topic_, td_topic_, via_device_;
+  bool discovery_, cloud_;
+  std::set<std::string> exposes_, options_;
+  bool publish_complete_{false};
+  uint32_t publish_time_{0};
 };
 
 enum MQTTClientState {
@@ -272,6 +297,10 @@ class MQTTClientComponent : public Component
 
   void set_wait_for_connection(bool wait_for_connection) { this->wait_for_connection_ = wait_for_connection; }
 
+  HOMEdCustomConfig* get_homed_custom() { return this->homed_custom_; }
+  void set_homed_custom(HOMEdCustomConfig *homed);
+  void publish_homed_custom();
+
  protected:
   void send_device_info_();
 
@@ -341,6 +370,8 @@ class MQTTClientComponent : public Component
 
   bool publish_nan_as_none_{false};
   bool wait_for_connection_{false};
+
+  HOMEdCustomConfig *homed_custom_{nullptr};
 };
 
 extern MQTTClientComponent *global_mqtt_client;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)

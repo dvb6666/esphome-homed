@@ -19,6 +19,25 @@ PROGMEM_STRING_TABLE(NumberMqttModeStrings, "", "box", "slider");
 MQTTNumberComponent::MQTTNumberComponent(Number *number) : number_(number) {}
 
 void MQTTNumberComponent::setup() {
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto expose = this->get_homed_name();
+    auto option = str_sprintf("\"%s\":{\"type\": \"number\", \"min\": %f, \"max\":  %f, \"step\": %f",
+      expose.c_str(), this->number_->traits.get_min_value(), this->number_->traits.get_max_value(), this->number_->traits.get_step());
+    const auto unit_of_measurement = this->number_->traits.get_unit_of_measurement_ref();
+    if (!unit_of_measurement.empty())
+      option += str_sprintf(", \"unit\": \"%s\"", unit_of_measurement.c_str());
+    option += "}";
+    mqtt::global_mqtt_client->get_homed_custom()->add_expose_with_option(expose, option);
+    this->subscribe_json(this->get_command_topic_(), [this](const std::string &topic, JsonObject root) {
+      auto name = this->get_homed_name().c_str();
+      if (root[name].is<float>()) {
+        float value = root[name];
+        auto call = this->number_->make_call();
+        call.set_value(value);
+        call.perform();
+      }
+    });
+  } else
   this->subscribe(this->get_command_topic_(), [this](const std::string &topic, const std::string &state) {
     auto val = parse_number<float>(state);
     if (!val.has_value()) {
@@ -61,6 +80,11 @@ void MQTTNumberComponent::send_discovery(JsonObject root, mqtt::SendDiscoveryCon
   if (!device_class.empty()) {
     root[MQTT_DEVICE_CLASS] = device_class;
   }
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto name = this->get_homed_name();
+    root[MQTT_COMMAND_TEMPLATE] = "{\"" + name + "\":{{ value }}}";
+    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " }}";
+  }
   // NOLINTEND(clang-analyzer-cplusplus.NewDeleteLeaks)
 
   config.command_topic = true;
@@ -73,6 +97,11 @@ bool MQTTNumberComponent::send_initial_state() {
   }
 }
 bool MQTTNumberComponent::publish_state(float value) {
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto name = this->get_homed_name();
+    return this->publish(this->get_state_topic_(), "{\"" + name + "\": \"" +
+      std::to_string(value) + "\"}");
+  }
   char topic_buf[MQTT_DEFAULT_TOPIC_MAX_LEN];
   char buffer[64];
   size_t len = buf_append_printf(buffer, sizeof(buffer), 0, "%f", value);

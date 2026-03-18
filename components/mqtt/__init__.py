@@ -77,6 +77,10 @@ CONF_DISCOVER_IP = "discover_ip"
 CONF_IDF_SEND_ASYNC = "idf_send_async"
 CONF_WAIT_FOR_CONNECTION = "wait_for_connection"
 
+CONF_HOMED_CUSTOM = "homed_custom"
+CONF_DEVICE_ID = "device_id"
+CONF_CLOUD = "cloud"
+
 # Max lengths for stack-based topic building.
 # These values are used in cv.Length() validators below to ensure the C++ code
 # in mqtt_component.cpp can safely use fixed-size stack buffers without overflow.
@@ -169,6 +173,7 @@ MQTT_DISCOVERY_OBJECT_ID_GENERATOR_OPTIONS = {
     "device_name": MQTTDiscoveryObjectIdGenerator.MQTT_DEVICE_NAME_OBJECT_ID_GENERATOR,
 }
 
+HOMEdCustomConfig = mqtt_ns.class_("HOMEdCustomConfig")
 
 def validate_config(value):
     # Populate default fields
@@ -316,6 +321,15 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_PUBLISH_NAN_AS_NONE, default=False): cv.boolean,
             cv.Optional(CONF_WAIT_FOR_CONNECTION, default=False): cv.boolean,
+            cv.Optional(CONF_HOMED_CUSTOM): cv.maybe_simple_value(cv.Schema(
+                {
+                    cv.GenerateID(): cv.declare_id(HOMEdCustomConfig),
+                    cv.Required(CONF_TOPIC_PREFIX): cv.publish_topic,
+                    cv.Optional(CONF_DEVICE_ID, default=""): cv.string,
+                    cv.Optional(CONF_DISCOVERY, default=False): cv.boolean,
+                    cv.Optional(CONF_CLOUD, default=False): cv.boolean,
+                }
+            ), key=CONF_TOPIC_PREFIX),
         }
     ),
     validate_config,
@@ -478,6 +492,17 @@ async def to_code(config):
     cg.add(var.set_publish_nan_as_none(config[CONF_PUBLISH_NAN_AS_NONE]))
 
     cg.add(var.set_wait_for_connection(config[CONF_WAIT_FOR_CONNECTION]))
+
+    homed_custom = config.get(CONF_HOMED_CUSTOM)
+    if homed_custom:
+        homed = cg.new_Pvariable(
+            homed_custom[CONF_ID],
+            homed_custom[CONF_TOPIC_PREFIX],
+            homed_custom[CONF_DEVICE_ID],
+            homed_custom[CONF_DISCOVERY],
+            homed_custom[CONF_CLOUD]
+        )
+        cg.add(var.set_homed_custom(homed))
 
 
 MQTT_PUBLISH_ACTION_SCHEMA = cv.Schema(

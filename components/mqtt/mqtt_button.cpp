@@ -15,6 +15,17 @@ using namespace esphome::button;
 MQTTButtonComponent::MQTTButtonComponent(button::Button *button) : button_(button) {}
 
 void MQTTButtonComponent::setup() {
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto expose = this->get_homed_name();
+    auto option = str_sprintf("\"%s\":{\"type\":\"button\"}", expose.c_str());
+    mqtt::global_mqtt_client->get_homed_custom()->add_expose_with_option(expose, option);
+    this->subscribe_json(this->get_command_topic_(), [this](const std::string &topic, JsonObject root) {
+      auto name = this->get_homed_name().c_str();
+      if ((root[name].is<bool>() && root[name] == true) || (root[name].is<const char*>() && root[name] == "true")) {
+        this->button_->press();
+      }
+    });
+  } else
   this->subscribe(this->get_command_topic_(), [this](const std::string &topic, const std::string &payload) {
     if (payload == "PRESS") {
       this->button_->press();
@@ -35,6 +46,10 @@ void MQTTButtonComponent::send_discovery(JsonObject root, mqtt::SendDiscoveryCon
   const auto device_class = this->button_->get_device_class_ref();
   if (!device_class.empty()) {
     root[MQTT_DEVICE_CLASS] = device_class;
+  }
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto name = this->get_homed_name();
+    root[MQTT_PAYLOAD_PRESS] = "{\"" + name + "\": true}";
   }
   // NOLINTEND(clang-analyzer-cplusplus.NewDeleteLeaks)
 }

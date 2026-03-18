@@ -20,6 +20,22 @@ using namespace esphome::sensor;
 MQTTSensorComponent::MQTTSensorComponent(Sensor *sensor) : sensor_(sensor) {}
 
 void MQTTSensorComponent::setup() {
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto expose = this->get_homed_name();
+    auto option = str_sprintf("\"%s\":{\"type\":\"sensor\"", expose.c_str());
+    const auto device_class = this->sensor_->get_device_class_ref();
+    if (!device_class.empty())
+      option += str_sprintf(",\"class\":\"%s\"", device_class.c_str());
+    if (this->sensor_->get_state_class() != STATE_CLASS_NONE)
+      option += str_sprintf(",\"state\":\"%s\"", LOG_STR_ARG(state_class_to_string(this->sensor_->get_state_class())));
+    const auto unit_of_measurement = this->sensor_->get_unit_of_measurement_ref();
+    if (!unit_of_measurement.empty())
+      option += str_sprintf(",\"unit\":\"%s\"", unit_of_measurement.c_str());
+    if (this->sensor_->get_accuracy_decimals() > 0)
+      option += str_sprintf(",\"round\":%d", this->sensor_->get_accuracy_decimals());
+    option += "}";
+    mqtt::global_mqtt_client->get_homed_custom()->add_expose_with_option(expose, option);
+  }
   this->sensor_->add_on_state_callback([this](float state) { this->publish_state(state); });
 }
 
@@ -69,6 +85,10 @@ void MQTTSensorComponent::send_discovery(JsonObject root, mqtt::SendDiscoveryCon
 #endif
   }
 
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto name = this->get_homed_name();
+    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " }}";
+  }
   config.command_topic = false;
 }
 bool MQTTSensorComponent::send_initial_state() {
@@ -85,6 +105,12 @@ bool MQTTSensorComponent::publish_state(float value) {
   int8_t accuracy = this->sensor_->get_accuracy_decimals();
   char buf[VALUE_ACCURACY_MAX_LEN];
   size_t len = value_accuracy_to_buf(buf, value, accuracy);
+
+  if (mqtt::global_mqtt_client->get_homed_custom()) {
+    auto name = this->get_homed_name();
+    return this->publish(this->get_state_topic_(), "{\"" + name + "\": \"" + buf + "\"}");
+  }
+
   return this->publish(this->get_state_topic_to_(topic_buf), buf, len);
 }
 

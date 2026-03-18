@@ -349,6 +349,9 @@ class MQTTComponent : public Component {
   /// Compute is_internal status based on topics and entity state.
   /// Called once during setup to cache the result.
   bool compute_is_internal_();
+
+  std::string &get_homed_name();
+  std::string homed_name_;
 };
 
 }  // namespace esphome::mqtt

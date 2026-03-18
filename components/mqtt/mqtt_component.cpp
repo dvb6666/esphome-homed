@@ -110,6 +110,9 @@ StringRef MQTTComponent::get_state_topic_to_(std::span<char, MQTT_DEFAULT_TOPIC_
     // Returns ref to existing data for static/value, uses buf only for lambda case
     return this->custom_state_topic_.ref_or_copy_to(buf.data(), buf.size());
   }
+  if (global_mqtt_client->get_homed_custom()) {
+    return StringRef(global_mqtt_client->get_homed_custom()->get_fd_topic());
+  }
   return this->get_default_topic_for_to_(buf, "state", 5);
 }
 
@@ -117,6 +120,9 @@ StringRef MQTTComponent::get_command_topic_to_(std::span<char, MQTT_DEFAULT_TOPI
   if (this->custom_command_topic_.has_value()) {
     // Returns ref to existing data for static/value, uses buf only for lambda case
     return this->custom_command_topic_.ref_or_copy_to(buf.data(), buf.size());
+  }
+  if (global_mqtt_client->get_homed_custom()) {
+    return StringRef(global_mqtt_client->get_homed_custom()->get_td_topic());
   }
   return this->get_default_topic_for_to_(buf, "command", 7);
 }
@@ -331,6 +337,10 @@ bool MQTTComponent::send_discovery_() {
 
         device_info[MQTT_DEVICE_CONNECTIONS][0][0] = "mac";
         device_info[MQTT_DEVICE_CONNECTIONS][0][1] = mac;
+
+        if (global_mqtt_client->get_homed_custom()) {
+          device_info[MQTT_VIA_DEVICE] = global_mqtt_client->get_homed_custom()->get_via_device();
+        }
       },
       this->qos_, discovery_info.retain);
   // NOLINTEND(clang-analyzer-cplusplus.NewDeleteLeaks)
@@ -444,6 +454,31 @@ bool MQTTComponent::compute_is_internal_() {
 
   // Use ESPHome's component internal state if topic_prefix is not empty with no custom state_topic or command_topic
   return this->get_entity()->is_internal();
+}
+
+std::string &MQTTComponent::get_homed_name() {
+  if (homed_name_.empty()) {
+    // camelCase name
+    auto name = str_lower_case(this->friendly_name_());
+    int len = name.length(), skip = 0;
+    bool previous_blank = false;
+    for (int i = 0; i < len; i++) {
+      if (std::isblank(name[i])) {
+        previous_blank = true;
+        skip++;
+      } else if (previous_blank && std::isdigit(name[i])) {
+        name[i - skip] = '_';
+        skip--;
+        name[i - skip] = name[i];
+        previous_blank = false;
+      } else {
+        name[i - skip] = previous_blank && std::isalpha(name[i]) ? std::toupper(name[i]) : name[i];
+        previous_blank = false;
+      }
+    }
+    homed_name_ = std::move(skip == 0 ? name : name.substr(0, len - skip));
+  }
+  return homed_name_;
 }
 
 }  // namespace esphome::mqtt

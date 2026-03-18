@@ -33,11 +33,80 @@ PROGMEM_STRING_TABLE(MQTTDisconnectReasonStrings, "TCP disconnected", "Unaccepta
                      "Identifier Rejected", "Server Unavailable", "Malformed Credentials", "Not Authorized",
                      "Not Enough Space", "TLS Bad Fingerprint", "DNS Resolve Error", "Unknown");
 
+HOMEdCustomConfig::HOMEdCustomConfig(const std::string &prefix, const std::string &device_id, bool discovery, bool cloud)
+ : prefix_(prefix), device_id_(device_id), discovery_(discovery), cloud_(cloud) {
+  if (this->device_id_.empty())
+    this->device_id_ = str_sanitize(App.get_name());
+  this->avail_topic_ = this->prefix_ + "/device/custom/" + this->device_id_;
+  this->fd_topic_ = this->prefix_ + "/fd/custom/" + this->device_id_;
+  this->td_topic_ = this->prefix_ + "/td/custom/" + this->device_id_;
+  this->command_topic_ = this->prefix_ + "/command/custom";
+  this->via_device_ = "homed-custom_" + this->prefix_;
+}
+
+void HOMEdCustomConfig::dump_config() {
+  ESP_LOGCONFIG(TAG, "  HOMEd prefix: '%s'", this->prefix_.c_str());
+  ESP_LOGCONFIG(TAG, "  HOMEd device_id: '%s'", this->device_id_.c_str());
+  ESP_LOGCONFIG(TAG, "  HOMEd discovery: %s", YESNO(this->discovery_));
+  ESP_LOGCONFIG(TAG, "  HOMEd cloud: %s", YESNO(this->cloud_));
+}
+
+void HOMEdCustomConfig::add_expose_with_option(std::string &expose, std::string &option) {
+    this->exposes_.insert(expose);
+    this->options_.insert(option);
+    this->publish_time_ = millis() + 1000;
+}
+
+bool HOMEdCustomConfig::can_publish(uint32_t now) {
+  if (!this->publish_complete_ && this->publish_time_ > 0 && this->publish_time_ <= now) {
+    this->publish_complete_ = true;
+    return true;
+  }
+  return false;
+}
+
 MQTTClientComponent::MQTTClientComponent() {
   global_mqtt_client = this;
   char mac_addr[MAC_ADDRESS_BUFFER_SIZE];
   get_mac_address_into_buffer(mac_addr);
   this->credentials_.client_id = make_name_with_suffix(App.get_name(), '-', mac_addr, MAC_ADDRESS_BUFFER_SIZE - 1);
+}
+
+void MQTTClientComponent::set_homed_custom(HOMEdCustomConfig *homed) {
+  if ((this->homed_custom_ = homed) == nullptr)
+    return;
+  auto avail_topic = this->homed_custom_->get_avail_topic();
+  this->set_birth_message(mqtt::MQTTMessage{
+    .topic = avail_topic, .payload = "{\"status\":\"online\"}", .qos = 0, .retain = true
+  });
+  this->set_last_will(mqtt::MQTTMessage{
+    .topic = avail_topic, .payload = "{\"status\":\"offline\"}", .qos = 0, .retain = true
+  });
+  this->set_shutdown_message(mqtt::MQTTMessage{
+    .topic = avail_topic, .payload = "{\"status\":\"offline\"}", .qos = 0, .retain = true
+  });
+}
+
+void MQTTClientComponent::publish_homed_custom() {
+  if (this->homed_custom_) {
+    auto id = this->homed_custom_->get_device_id().c_str();
+    std::string exposes = "", options = "";
+    for (auto exp : this->homed_custom_->get_exposes()) {
+      if (!exposes.empty()) exposes += ",";
+      exposes += str_sprintf("\"%s\"", exp.c_str());
+    }
+    for (auto opt : this->homed_custom_->get_options()) {
+      if (!options.empty()) options += ",";
+      options += opt;
+    }
+    auto payload = str_sprintf(
+      "{\"action\":\"updateDevice\",\"data\":{\"active\":true,\"cloud\":%s,\"discovery\":%s,\"exposes\":[%s],\"id\":\"%s\",\"name\":\"%s\",\"note\":\"Auto generated Esphome config\",\"options\":{%s},\"real\":true},\"device\":\"%s\"}",
+      this->homed_custom_->is_cloud() ? "true" : "false",
+      this->homed_custom_->is_discovery() ? "true" : "false",
+      exposes.c_str(), id, App.get_friendly_name().c_str(), options.c_str(), id
+    );
+    this->publish(this->homed_custom_->get_command_topic(), payload, 0, false);
+  }
 }
 
 // Connection
@@ -204,6 +273,9 @@ void MQTTClientComponent::dump_config() {
   }
   if (!this->availability_.topic.empty()) {
     ESP_LOGCONFIG(TAG, "  Availability: '%s'", this->availability_.topic.c_str());
+  }
+  if (this->homed_custom_) {
+    this->homed_custom_->dump_config();
   }
 }
 bool MQTTClientComponent::can_proceed() {
@@ -394,6 +466,11 @@ void MQTTClientComponent::loop() {
         // This is more efficient than each component polling in its own loop
         for (MQTTComponent *component : this->children_) {
           component->process_resend();
+        }
+
+        if (this->homed_custom_ && this->homed_custom_->can_publish(now)) {
+          ESP_LOGD(TAG, "HOMEd Custom publishing");
+          this->publish_homed_custom();
         }
       }
       break;

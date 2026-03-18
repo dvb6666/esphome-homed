@@ -173,6 +173,7 @@
   X(MQTT_PAYLOAD_OSCILLATION_OFF, "pl_osc_off", "payload_oscillation_off") \
   X(MQTT_PAYLOAD_OSCILLATION_ON, "pl_osc_on", "payload_oscillation_on") \
   X(MQTT_PAYLOAD_PAUSE, "pl_paus", "payload_pause") \
+  X(MQTT_PAYLOAD_PRESS, "pl_prs", "payload_press") \
   X(MQTT_PAYLOAD_RESET, "pl_rst", "payload_reset") \
   X(MQTT_PAYLOAD_RESET_HUMIDITY, "pl_rst_hum", "payload_reset_humidity") \
   X(MQTT_PAYLOAD_RESET_MODE, "pl_rst_mode", "payload_reset_mode") \
@@ -281,6 +282,7 @@
   X(MQTT_UNIQUE_ID, "uniq_id", "unique_id") \
   X(MQTT_UNIT_OF_MEASUREMENT, "unit_of_meas", "unit_of_measurement") \
   X(MQTT_VALUE_TEMPLATE, "val_tpl", "value_template") \
+  X(MQTT_VIA_DEVICE, "via_device", "via_device") \
   X(MQTT_WHITE_COMMAND_TOPIC, "whit_cmd_t", "white_command_topic") \
   X(MQTT_WHITE_SCALE, "whit_scl", "white_scale") \
   X(MQTT_WHITE_VALUE_COMMAND_TOPIC, "whit_val_cmd_t", "white_value_command_topic") \
