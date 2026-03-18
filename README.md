@@ -19,3 +19,5 @@ external_components:
   - source: github://dvb6666/esphome-homed
     refresh: 1sec
 ```
+
+**More configuration examples you can find in [examples](examples) folder.**
