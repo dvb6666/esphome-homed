@@ -28,6 +28,10 @@ namespace esphome::mqtt {
 
 static const char *const TAG = "mqtt";
 
+// Maximum number of MQTT component resends per loop iteration.
+// Limits work to avoid triggering the task watchdog on reconnect.
+static constexpr uint8_t MAX_RESENDS_PER_LOOP = 8;
+
 // Disconnect reason strings indexed by MQTTClientDisconnectReason enum (0-8)
 PROGMEM_STRING_TABLE(MQTTDisconnectReasonStrings, "TCP disconnected", "Unacceptable Protocol Version",
                      "Identifier Rejected", "Server Unavailable", "Malformed Credentials", "Not Authorized",
@@ -113,8 +117,10 @@ void MQTTClientComponent::publish_homed_custom() {
 void MQTTClientComponent::setup() {
   this->mqtt_backend_.set_on_message(
       [this](const char *topic, const char *payload, size_t len, size_t index, size_t total) {
-        if (index == 0)
+        if (index == 0) {
+          this->payload_buffer_.clear();
           this->payload_buffer_.reserve(total);
+        }
 
         // append new payload, may contain incomplete MQTT message
         this->payload_buffer_.append(payload, len);
@@ -133,7 +139,10 @@ void MQTTClientComponent::setup() {
   });
 #ifdef USE_LOGGER
   if (this->is_log_message_enabled() && logger::global_logger != nullptr) {
-    logger::global_logger->add_log_listener(this);
+    logger::global_logger->add_log_callback(
+        this, [](void *self, uint8_t level, const char *tag, const char *message, size_t message_len) {
+          static_cast<MQTTClientComponent *>(self)->on_log(level, tag, message, message_len);
+        });
   }
 #endif
 
@@ -463,9 +472,16 @@ void MQTTClientComponent::loop() {
         this->resubscribe_subscriptions_();
 
         // Process pending resends for all MQTT components centrally
-        // This is more efficient than each component polling in its own loop
-        for (MQTTComponent *component : this->children_) {
-          component->process_resend();
+        // Limit work per loop iteration to avoid triggering task WDT on reconnect
+        {
+          uint8_t resend_count = 0;
+          for (MQTTComponent *component : this->children_) {
+            if (component->is_resend_pending()) {
+              component->process_resend();
+              if (++resend_count >= MAX_RESENDS_PER_LOOP)
+                break;
+            }
+          }
         }
 
         if (this->homed_custom_ && this->homed_custom_->can_publish(now)) {
@@ -617,8 +633,8 @@ bool MQTTClientComponent::publish(const char *topic, const char *payload, size_t
 }
 
 bool MQTTClientComponent::publish_json(const char *topic, const json::json_build_t &f, uint8_t qos, bool retain) {
-  std::string message = json::build_json(f);
-  return this->publish(topic, message.c_str(), message.length(), qos, retain);
+  auto message = json::build_json(f);
+  return this->publish(topic, message.c_str(), message.size(), qos, retain);
 }
 
 void MQTTClientComponent::enable() {
