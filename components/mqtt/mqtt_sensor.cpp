@@ -23,9 +23,10 @@ void MQTTSensorComponent::setup() {
   if (mqtt::global_mqtt_client->get_homed_custom()) {
     auto expose = this->get_homed_name();
     auto option = str_sprintf("\"%s\":{\"type\":\"sensor\"", expose.c_str());
-    const auto device_class = this->sensor_->get_device_class_ref();
-    if (!device_class.empty())
-      option += str_sprintf(",\"class\":\"%s\"", device_class.c_str());
+    char dc_buf[MAX_DEVICE_CLASS_LENGTH];
+    const char *dc = this->get_entity()->get_device_class_to(dc_buf);
+    if (dc[0] != '\0')
+      option += str_sprintf(",\"class\":\"%s\"", dc);
     if (this->sensor_->get_state_class() != STATE_CLASS_NONE)
       option += str_sprintf(",\"state\":\"%s\"", LOG_STR_ARG(state_class_to_string(this->sensor_->get_state_class())));
     const auto unit_of_measurement = this->sensor_->get_unit_of_measurement_ref();

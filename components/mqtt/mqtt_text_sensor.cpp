@@ -26,9 +26,10 @@ void MQTTTextSensor::setup() {
   if (mqtt::global_mqtt_client->get_homed_custom()) {
     auto expose = this->get_homed_name();
     auto option = str_sprintf("\"%s\":{\"type\":\"sensor\"", expose.c_str());
-    const auto device_class = this->sensor_->get_device_class_ref();
-    if (!device_class.empty())
-      option += str_sprintf(",\"class\":\"%s\"", device_class.c_str());
+    char dc_buf[MAX_DEVICE_CLASS_LENGTH];
+    const char *dc = this->get_entity()->get_device_class_to(dc_buf);
+    if (dc[0] != '\0')
+      option += str_sprintf(",\"class\":\"%s\"", dc);
     option += "}";
     mqtt::global_mqtt_client->get_homed_custom()->add_expose_with_option(expose, option);
   }
