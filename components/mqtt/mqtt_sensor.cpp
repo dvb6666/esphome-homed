@@ -87,7 +87,7 @@ void MQTTSensorComponent::send_discovery(JsonObject root, mqtt::SendDiscoveryCon
 
   if (mqtt::global_mqtt_client->get_homed_custom()) {
     auto name = this->get_homed_name();
-    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " }}";
+    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " | is_defined }}";
   }
   config.command_topic = false;
 }

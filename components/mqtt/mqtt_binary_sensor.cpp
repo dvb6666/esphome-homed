@@ -41,7 +41,7 @@ void MQTTBinarySensorComponent::send_discovery(JsonObject root, mqtt::SendDiscov
     root[MQTT_PAYLOAD_OFF] = mqtt::global_mqtt_client->get_availability().payload_not_available;
   if (mqtt::global_mqtt_client->get_homed_custom() && !this->binary_sensor_->is_status_binary_sensor()) {
     auto name = this->get_homed_name();
-    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " }}";
+    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " | is_defined }}";
   }
   // NOLINTEND(clang-analyzer-cplusplus.NewDeleteLeaks)
   config.command_topic = false;

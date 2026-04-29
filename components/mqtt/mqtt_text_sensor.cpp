@@ -17,7 +17,7 @@ void MQTTTextSensor::send_discovery(JsonObject root, mqtt::SendDiscoveryConfig &
   // NOLINTBEGIN(clang-analyzer-cplusplus.NewDeleteLeaks) false positive with ArduinoJson
   if (mqtt::global_mqtt_client->get_homed_custom()) {
     auto name = this->get_homed_name();
-    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " }}";
+    root[MQTT_VALUE_TEMPLATE] = "{{ value_json." + name + " | is_defined }}";
   }
   // NOLINTEND(clang-analyzer-cplusplus.NewDeleteLeaks)
   config.command_topic = false;
